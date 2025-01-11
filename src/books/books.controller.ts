@@ -15,4 +15,10 @@ export class BooksController {
   findOne(@Param('id') id: string) {
     return this.booksService.findOne(+id);
   }
+
+  @Patch('update-all-with-year')
+  async updateAllWithYear(): Promise<string> {
+    await this.booksService.updateAllBooksWithYear();
+    return 'All books updated with publication years';
+  }
 }
