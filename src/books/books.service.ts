@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Between, LessThanOrEqual, MoreThanOrEqual, Repository } from 'typeorm';
+import { MoreThanOrEqual, Repository } from 'typeorm';
 import { OpenLibraryClientService } from '../open-library/open-library-client.service';
 import { Book } from './books.entity';
 import { Readable } from 'stream';
@@ -30,6 +30,30 @@ export class BooksService {
     return book;
   }
 
+  async findBooksByAuthorCountryAndYear(country: string, from?: number): Promise<Book[]> {
+    const whereConditions: any = {
+      authors: { country },
+    };
+
+    if (from) {
+      whereConditions.year = MoreThanOrEqual(from);
+    }
+
+    const books = await this.bookRepository.find({
+      where: whereConditions,
+      relations: this.DEFAULT_RELATIONS,
+      order: { year: 'ASC' },
+    });
+
+    if (!books.length) {
+      throw new NotFoundException(
+        `No books found with authors from '${country}'${from ? ` and published from year ${from}` : ''}.`,
+      );
+    }
+
+    return books;
+  }
+
   async updateAllBooksWithYear(): Promise<void> {
     const books = await this.findAll();
     const bookStream = Readable.from(books);
@@ -37,6 +61,7 @@ export class BooksService {
     bookStream.on('data', async (book: Book) => {
       try {
         const bookDetails = await this.getBookDetailsWithFallback(book.workId);
+
         if (bookDetails?.first_publish_date) {
           await this.updateBookYear(book, bookDetails.first_publish_date);
         } else {
@@ -48,32 +73,42 @@ export class BooksService {
     });
 
     return new Promise((resolve, reject) => {
-      bookStream.on('end', resolve);
-      bookStream.on('error', reject);
+      bookStream.on('end', () => {
+        console.log('All books processed successfully.');
+        resolve();
+      });
+
+      bookStream.on('error', (error) => {
+        console.error('Stream processing error:', error.message);
+        reject(error);
+      });
     });
   }
 
   private async getBookDetailsWithFallback(workId: string): Promise<any> {
-    let data = await this.openLibraryClientService.getBookDetails(workId);
+    const data = await this.openLibraryClientService.getBookDetails(workId);
 
-    if (!data.first_publish_date) {
-      const location = this.extractLocation(data.location);
-      if (location) {
-        console.log(`Extracted location: ${location}`);
-        data = await this.openLibraryClientService.getBookDetails(location);
-      } else {
-        throw new Error('Failed to extract location from data.');
-      }
+    if (data.first_publish_date) {
+      return data;
     }
-    return data;
+
+    const location = this.extractLocation(data.location);
+
+    if (!location) {
+      throw new Error('Failed to extract location from data.');
+    }
+
+    return this.openLibraryClientService.getBookDetails(location);
   }
 
-  private async updateBookYear(book: any, firstPublishDate: string): Promise<void> {
+  private async updateBookYear(book: Book, firstPublishDate: string): Promise<void> {
     const year = this.extractYear(firstPublishDate);
-    if (year) {
-      book.year = year;
-      await this.bookRepository.save(book);
+    if (!year) {
+      console.log(`Invalid publish date format for book ID: ${book.id}`);
+      return;
     }
+    book.year = year;
+    await this.bookRepository.save(book);
   }
 
   private extractYear(dateString: string): number | null {

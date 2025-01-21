@@ -16,6 +16,14 @@ export class BooksController {
     return this.booksService.findOne(+id);
   }
 
+  @Get('query/:country')
+  async getBooksByCountryAndYear(
+    @Param('country') country: string,
+    @Query('from') from?: number,
+  ): Promise<Book[]> {
+    return this.booksService.findBooksByAuthorCountryAndYear(country, from);
+  }
+
   @Patch('update-all-with-year')
   async updateAllWithYear(): Promise<string> {
     await this.booksService.updateAllBooksWithYear();
