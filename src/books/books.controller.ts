@@ -20,8 +20,9 @@ export class BooksController {
   async getBooksByCountryAndYear(
     @Param('country') country: string,
     @Query('from') from?: number,
+    @Query('to') to?: number,
   ): Promise<Book[]> {
-    return this.booksService.findBooksByAuthorCountryAndYear(country, from);
+    return this.booksService.findBooksByAuthorCountryAndYear(country, from, to);
   }
 
   @Patch('update-all-with-year')

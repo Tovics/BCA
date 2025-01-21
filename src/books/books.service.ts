@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { MoreThanOrEqual, Repository } from 'typeorm';
+import { LessThanOrEqual, MoreThanOrEqual, Repository, Between } from 'typeorm';
 import { OpenLibraryClientService } from '../open-library/open-library-client.service';
 import { Book } from './books.entity';
 import { Readable } from 'stream';
@@ -30,13 +30,17 @@ export class BooksService {
     return book;
   }
 
-  async findBooksByAuthorCountryAndYear(country: string, from?: number): Promise<Book[]> {
+  async findBooksByAuthorCountryAndYear(country: string, from?: number, to?: number): Promise<Book[]> {
     const whereConditions: any = {
       authors: { country },
     };
 
-    if (from) {
+    if (from && to) {
+      whereConditions.year = Between(from, to);
+    } else if (from) {
       whereConditions.year = MoreThanOrEqual(from);
+    } else if (to) {
+      whereConditions.year = LessThanOrEqual(to);
     }
 
     const books = await this.bookRepository.find({
@@ -47,7 +51,7 @@ export class BooksService {
 
     if (!books.length) {
       throw new NotFoundException(
-        `No books found with authors from '${country}'${from ? ` and published from year ${from}` : ''}.`,
+        `No books found with authors from '${country}'${from && to ? ` and published between years ${from} and ${to}` : from ? ` and published from year ${from}` : to ? ` and published until year ${to}` : ''}.`
       );
     }
 
